@@ -97,39 +97,39 @@ The Slack ChatGPT Assistant Bot follows a modular architecture with clear separa
 ```mermaid
 graph TB
     %% External Services
-    Slack[Slack Platform] --> |@mention events| Bot[Slack Bot App]
+    Slack[Slack Platform] --> |mentions| Bot[Slack Bot App]
     Bot --> |API calls| Slack
 
     %% Core Application Components
     Bot --> |HTTP requests| Bolt[Bolt Framework]
-    Bolt --> |event handling| Handlers[Event Handlers]
-    Handlers --> |context analysis| ContextAnalyzer[Context Analyzer Service]
-    ContextAnalyzer --> |conversation history| SlackAPI[Slack API]
+    Bolt --> |events| Handlers[Event Handlers]
+    Handlers --> |analyze| ContextAnalyzer[Context Analyzer Service]
+    ContextAnalyzer --> |fetch history| SlackAPI[Slack API]
     SlackAPI --> |message data| ContextAnalyzer
 
     %% AI Integration
-    ContextAnalyzer --> |processed context| ChatGPTService[ChatGPT Service]
+    ContextAnalyzer --> |context| ChatGPTService[ChatGPT Service]
     ChatGPTService --> |API calls| OpenAI[OpenAI API]
-    OpenAI --> |AI suggestions| ChatGPTService
+    OpenAI --> |suggestions| ChatGPTService
     ChatGPTService --> |suggestions| SuggestionGenerator[Suggestion Generator]
 
     %% Response Flow
-    SuggestionGenerator --> |formatted responses| Handlers
-    Handlers --> |ephemeral messages| Bolt
-    Bolt --> |private responses| Slack
+    SuggestionGenerator --> |responses| Handlers
+    Handlers --> |ephemeral| Bolt
+    Bolt --> |private| Slack
 
     %% Configuration
-    ConfigService[Config Service] --> |user preferences| ContextAnalyzer
-    ConfigService --> |analysis methods| SuggestionGenerator
+    ConfigService[Config Service] --> |preferences| ContextAnalyzer
+    ConfigService --> |methods| SuggestionGenerator
 
     %% Middleware
-    RateLimiter[Rate Limiter] --> |request throttling| Bolt
-    ErrorHandler[Error Handler] --> |error management| Handlers
+    RateLimiter[Rate Limiter] --> |throttle| Bolt
+    ErrorHandler[Error Handler] --> |handle errors| Handlers
 
     %% Data Flow
     subgraph "Data Processing"
-        PrivacyUtils[Privacy Utils] --> |data sanitization| ContextAnalyzer
-        Logger[Logger] --> |logging| Bot
+        PrivacyUtils[Privacy Utils] --> |sanitize| ContextAnalyzer
+        Logger[Logger] --> |log| Bot
     end
 
     %% Styling
