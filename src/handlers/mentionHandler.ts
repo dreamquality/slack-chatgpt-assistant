@@ -3,13 +3,15 @@ import { sendEphemeralMessage } from "../utils/privacyUtils";
 
 export function registerMentionHandler(app: App) {
   app.event("app_mention", async ({ event, client }) => {
-    const user = event.user;
+    if (!event.user || !event.channel) {
+      console.warn("Missing user or channel in app_mention event");
+      return;
+    }
 
-    // Respond with an ephemeral message for privacy
     await sendEphemeralMessage(client, {
       channel: event.channel,
-      user,
-      text: `Hi <@${user}>, I received your mention! (Feature under development)`,
+      user: event.user,
+      text: `Hi <@${event.user}>! I'm here to help you with conversation context and response suggestions. Mention me in any conversation and I'll analyze the context to provide helpful suggestions.`,
       thread_ts: event.ts,
     });
   });

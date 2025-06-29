@@ -1,78 +1,100 @@
 import { App } from "@slack/bolt";
-import { configService, UserConfig } from "../services/configService";
+import { configService } from "../services/configService";
 import { sendEphemeralMessage } from "../utils/privacyUtils";
 
 export function registerConfigHandler(app: App) {
-  app.command("/assistant", async ({ command, ack, respond, client }) => {
+  // Command to show current configuration
+  app.command("/config", async ({ command, ack, client }) => {
     await ack();
-    if (command.text.trim() === "config") {
-      const userId = command.user_id;
-      const userConfig = await configService.getUserConfig(userId);
 
-      const configText = formatUserConfig(userConfig);
-      const attachments = createConfigAttachments();
+    const userId = command.user_id;
+    const teamId = command.team_id;
+    const config = configService.getUserConfig(userId);
+    const teamConfig = configService.getTeamConfig(teamId);
 
+    const message = `*Your Current Configuration*
+
+*Analysis Method:* ${config.analysisMethod}
+*Recent Days:* ${config.recentDays || teamConfig.defaultRecentDays}
+*Max Messages:* ${config.maxMessages || teamConfig.defaultMaxMessages}
+*Keywords:* ${
+      config.keywords?.join(", ") || teamConfig.allowedKeywords.join(", ")
+    }
+
+*Team Defaults:*
+*Default Method:* ${teamConfig.defaultAnalysisMethod}
+*Default Recent Days:* ${teamConfig.defaultRecentDays}
+*Default Max Messages:* ${teamConfig.defaultMaxMessages}
+*Allowed Keywords:* ${teamConfig.allowedKeywords.join(", ")}`;
+
+    await sendEphemeralMessage(client, {
+      channel: command.channel_id,
+      user: userId,
+      text: message,
+    });
+  });
+
+  // Command to change analysis method
+  app.command("/config-method", async ({ command, ack, client }) => {
+    await ack();
+
+    const userId = command.user_id;
+    const method = command.text.trim() as any;
+
+    const validation = configService.validateUserConfig({
+      analysisMethod: method,
+    });
+
+    if (!validation.isValid) {
       await sendEphemeralMessage(client, {
         channel: command.channel_id,
         user: userId,
-        text: configText,
-        attachments,
+        text: `❌ Invalid configuration: ${validation.errors.join(", ")}`,
       });
-    } else {
-      await respond({
-        response_type: "ephemeral",
-        text: "Unknown command. Try `/assistant config`.",
-      });
+      return;
     }
+
+    configService.setUserConfig(userId, { analysisMethod: method });
+
+    await sendEphemeralMessage(client, {
+      channel: command.channel_id,
+      user: userId,
+      text: `✅ Analysis method updated to: ${method}`,
+    });
   });
-}
 
-function formatUserConfig(config: UserConfig | null): string {
-  if (!config) {
-    return "*⚙️ Configuration*\n\nNo custom configuration found. Using default settings.";
-  }
+  // Command to reset configuration
+  app.command("/config-reset", async ({ command, ack, client }) => {
+    await ack();
 
-  return `*⚙️ Your Configuration*
-  
-*Analysis Method:* ${config.analysisMethod}
-${config.recentDays ? `*Recent Days:* ${config.recentDays}` : ""}
-${config.keywords ? `*Keywords:* ${config.keywords.join(", ")}` : ""}
-${config.maxMessages ? `*Max Messages:* ${config.maxMessages}` : ""}
-*Last Updated:* ${new Date(config.lastUpdated).toLocaleString()}`;
-}
+    const userId = command.user_id;
+    configService.resetUserConfig(userId);
 
-function createConfigAttachments(): any[] {
-  return [
-    {
-      text: "Choose your preferred analysis method:",
-      color: "#36a64f",
-      actions: [
-        {
-          name: "set_method",
-          text: "Full History",
-          type: "button",
-          value: "full_history",
-          style: "primary",
-        },
-        {
-          name: "set_method",
-          text: "Recent Messages",
-          type: "button",
-          value: "recent_messages",
-        },
-        {
-          name: "set_method",
-          text: "Thread Specific",
-          type: "button",
-          value: "thread_specific",
-        },
-        {
-          name: "set_method",
-          text: "Keyword Based",
-          type: "button",
-          value: "keyword_based",
-        },
-      ],
-    },
-  ];
+    await sendEphemeralMessage(client, {
+      channel: command.channel_id,
+      user: userId,
+      text: "✅ Configuration reset to defaults",
+    });
+  });
+
+  // Command to show available methods
+  app.command("/config-methods", async ({ command, ack, client }) => {
+    await ack();
+
+    const methods = configService.getAvailableAnalysisMethods();
+    const message = `*Available Analysis Methods*
+
+${methods
+  .map(
+    (method) => `*${method.label}* (${method.value})
+${method.description}`
+  )
+  .join("\n\n")}`;
+
+    await sendEphemeralMessage(client, {
+      channel: command.channel_id,
+      user: command.user_id,
+      text: message,
+    });
+  });
 }

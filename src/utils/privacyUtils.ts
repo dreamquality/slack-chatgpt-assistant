@@ -13,13 +13,22 @@ export async function sendEphemeralMessage(
   options: EphemeralMessageOptions
 ): Promise<void> {
   try {
-    await client.chat.postEphemeral({
+    const messageOptions: any = {
       channel: options.channel,
       user: options.user,
       text: options.text,
-      thread_ts: options.thread_ts,
-      attachments: options.attachments,
-    });
+      as_user: true,
+    };
+
+    if (options.thread_ts) {
+      messageOptions.thread_ts = options.thread_ts;
+    }
+
+    if (options.attachments) {
+      messageOptions.attachments = options.attachments;
+    }
+
+    await client.chat.postEphemeral(messageOptions);
   } catch (error) {
     console.error("Failed to send ephemeral message:", error);
     throw error;

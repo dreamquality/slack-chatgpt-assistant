@@ -1,13 +1,14 @@
 import { createOpenAIClient, openaiConfig } from "../config/openai";
-import { ProcessedMessage } from "./contextAnalyzer";
 
 export interface ChatGPTResponse {
   content: string;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
+  usage?:
+    | {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+      }
+    | undefined;
 }
 
 export class ChatGPTError extends Error {
@@ -61,7 +62,13 @@ Please provide your suggestions:`;
       content:
         completion.choices[0]?.message?.content ||
         "Sorry, I could not generate a response.",
-      usage: completion.usage,
+      usage: completion.usage
+        ? {
+            prompt_tokens: completion.usage.prompt_tokens,
+            completion_tokens: completion.usage.completion_tokens,
+            total_tokens: completion.usage.total_tokens,
+          }
+        : undefined,
     };
   } catch (error: any) {
     console.error("ChatGPT API error:", error);
