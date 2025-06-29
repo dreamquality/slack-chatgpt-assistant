@@ -18,7 +18,7 @@ function setupHealthCheck(app: App) {
   // Add a simple health check endpoint using Express
   const expressApp = (app as any).receiver?.app;
   if (expressApp) {
-    expressApp.get("/health", (req: Request, res: Response) => {
+    expressApp.get("/health", (_req: Request, res: Response) => {
       res.status(200).json({
         status: "healthy",
         timestamp: new Date().toISOString(),
@@ -27,7 +27,7 @@ function setupHealthCheck(app: App) {
       });
     });
 
-    expressApp.get("/status", (req: Request, res: Response) => {
+    expressApp.get("/status", (_req: Request, res: Response) => {
       res.status(200).json({
         status: "running",
         version: process.env.npm_package_version || "1.0.0",

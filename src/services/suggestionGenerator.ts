@@ -1,149 +1,189 @@
 import { generateResponse } from "./chatgptService";
 
 export interface Suggestion {
-  type: "template" | "improvement" | "clarifying_question" | "summary";
-  content: string;
-  confidence?: number;
+  type: "assertive" | "clarifying" | "collaborative" | "professional";
+  text: string;
+  confidence: number;
+}
+
+export interface SuggestionResponse {
+  suggestions: Suggestion[];
+  contextSummary: string;
+  analysisMethod: string;
 }
 
 export async function generateSuggestions(
   context: string,
-  userQuestion: string
-): Promise<Suggestion[]> {
+  userQuestion: string,
+  analysisMethod: string = "recent_messages"
+): Promise<SuggestionResponse> {
   try {
-    const response = await generateResponse(context, userQuestion);
+    const prompt = `Based on the conversation context below, provide 3 different types of response suggestions for the user's question. Each suggestion should be appropriate for the context and tone of the conversation.
 
-    // Parse the response and create different suggestion types
-    const suggestions: Suggestion[] = [];
+CONVERSATION CONTEXT:
+${context}
 
-    // Split response into different suggestions (assuming numbered or bulleted format)
-    const lines = response.content.split("\n").filter((line) => line.trim());
+USER'S QUESTION: ${userQuestion}
 
-    lines.forEach((line, index) => {
-      if (line.trim()) {
-        const cleanContent = line
-          .replace(/^\d+\.\s*/, "")
-          .replace(/^[-*]\s*/, "")
-          .trim();
+ANALYSIS METHOD USED: ${analysisMethod}
 
-        // Determine suggestion type based on content and position
-        let type: Suggestion["type"] = "template";
-        if (cleanContent.toLowerCase().includes("?")) {
-          type = "clarifying_question";
-        } else if (index === 0) {
-          type = "template";
-        } else if (index === 1) {
-          type = "improvement";
-        } else {
-          type = "summary";
-        }
+Please provide 3 suggestions in the following format:
 
+1. ASSERTIVE RESPONSE (direct, confident, takes charge):
+[Your assertive response here]
+
+2. CLARIFYING QUESTION (asks for more information):
+[Your clarifying question here]
+
+3. COLLABORATIVE APPROACH (works with others, inclusive):
+[Your collaborative response here]
+
+Make sure each suggestion is:
+- Contextually relevant to the conversation
+- Professional and appropriate
+- Different in tone and approach
+- Actionable and specific`;
+
+    const response = await generateResponse(context, prompt);
+
+    // Parse the response to extract suggestions
+    const suggestions = parseSuggestionsFromResponse(response.content);
+
+    return {
+      suggestions,
+      contextSummary: `Analyzed ${analysisMethod} context`,
+      analysisMethod,
+    };
+  } catch (error) {
+    console.error("Error generating suggestions:", error);
+    return {
+      suggestions: getFallbackSuggestions(),
+      contextSummary: "Error analyzing context",
+      analysisMethod,
+    };
+  }
+}
+
+function parseSuggestionsFromResponse(response: string): Suggestion[] {
+  const suggestions: Suggestion[] = [];
+
+  // Split response into lines and look for numbered suggestions
+  const lines = response.split("\n");
+  let currentSuggestion = "";
+  let currentType: Suggestion["type"] = "professional";
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    // Check for suggestion type indicators
+    if (trimmedLine.toLowerCase().includes("assertive")) {
+      currentType = "assertive";
+      currentSuggestion = "";
+    } else if (trimmedLine.toLowerCase().includes("clarifying")) {
+      currentType = "clarifying";
+      currentSuggestion = "";
+    } else if (trimmedLine.toLowerCase().includes("collaborative")) {
+      currentType = "collaborative";
+      currentSuggestion = "";
+    } else if (trimmedLine.match(/^\d+\./)) {
+      // Start of a new numbered suggestion
+      if (currentSuggestion.trim()) {
         suggestions.push({
-          type,
-          content: cleanContent,
+          type: currentType,
+          text: currentSuggestion.trim(),
           confidence: 0.8,
         });
       }
-    });
-
-    // Ensure we have at least one of each type if possible
-    const result: Suggestion[] = [];
-
-    // Add template suggestion
-    const template =
-      suggestions.find((s) => s.type === "template") || suggestions[0];
-    if (template) result.push(template);
-
-    // Add improvement suggestion
-    const improvement =
-      suggestions.find((s) => s.type === "improvement") || suggestions[1];
-    if (improvement && improvement !== template) result.push(improvement);
-
-    // Add clarifying question
-    const question =
-      suggestions.find((s) => s.type === "clarifying_question") ||
-      suggestions[2];
-    if (question && !result.includes(question)) result.push(question);
-
-    return result.slice(0, 3); // Limit to 3 suggestions
-  } catch (error) {
-    console.error("Error generating suggestions:", error);
-    return [
-      {
-        type: "template",
-        content:
-          "Sorry, I encountered an error while generating suggestions. Please try again.",
-        confidence: 0,
-      },
-    ];
+      currentSuggestion = trimmedLine.replace(/^\d+\.\s*/, "");
+    } else if (
+      trimmedLine &&
+      !trimmedLine.startsWith("[") &&
+      !trimmedLine.endsWith("]")
+    ) {
+      // Add to current suggestion
+      currentSuggestion += (currentSuggestion ? " " : "") + trimmedLine;
+    }
   }
+
+  // Add the last suggestion
+  if (currentSuggestion.trim()) {
+    suggestions.push({
+      type: currentType,
+      text: currentSuggestion.trim(),
+      confidence: 0.8,
+    });
+  }
+
+  // If we couldn't parse structured suggestions, create generic ones
+  if (suggestions.length === 0) {
+    return getFallbackSuggestions();
+  }
+
+  return suggestions.slice(0, 3); // Ensure we only return 3 suggestions
 }
 
 export function formatSuggestionsForSlack(suggestions: Suggestion[]): string {
-  if (suggestions.length === 0) {
-    return "No suggestions available.";
-  }
+  let formattedText = "*🤖 Response Suggestions*\n\n";
 
-  let formatted = "*🤖 AI Response Suggestions:*\n\n";
+  suggestions.forEach((suggestion) => {
+    const emoji = getEmojiForType(suggestion.type);
+    const typeLabel = getTypeLabel(suggestion.type);
 
-  suggestions.forEach((suggestion, index) => {
-    const emoji = getSuggestionEmoji(suggestion.type);
-    const label = getSuggestionLabel(suggestion.type);
-    formatted += `${emoji} *${label}:*\n${suggestion.content}\n\n`;
+    formattedText += `${emoji} *${typeLabel}*\n${suggestion.text}\n\n`;
   });
 
-  return formatted.trim();
+  formattedText +=
+    "_💡 These are suggestions only. Choose the approach that best fits your situation._";
+
+  return formattedText;
 }
 
-function getSuggestionEmoji(type: Suggestion["type"]): string {
+function getEmojiForType(type: Suggestion["type"]): string {
   switch (type) {
-    case "template":
-      return "💬";
-    case "improvement":
-      return "✨";
-    case "clarifying_question":
+    case "assertive":
+      return "💪";
+    case "clarifying":
       return "❓";
-    case "summary":
-      return "📝";
+    case "collaborative":
+      return "🤝";
+    case "professional":
+      return "💼";
     default:
       return "💡";
   }
 }
 
-function getSuggestionLabel(type: Suggestion["type"]): string {
+function getTypeLabel(type: Suggestion["type"]): string {
   switch (type) {
-    case "template":
-      return "Ready Response";
-    case "improvement":
-      return "Enhanced Version";
-    case "clarifying_question":
+    case "assertive":
+      return "Assertive Response";
+    case "clarifying":
       return "Clarifying Question";
-    case "summary":
-      return "Summary";
+    case "collaborative":
+      return "Collaborative Approach";
+    case "professional":
+      return "Professional Response";
     default:
       return "Suggestion";
   }
 }
 
-export function getFallbackSuggestions(userQuestion: string): Suggestion[] {
+export function getFallbackSuggestions(): Suggestion[] {
   return [
     {
-      type: "template",
-      content:
-        "I'm having trouble accessing my AI capabilities right now. Here's a general response template you can customize: \"Thank you for your message. I'll look into this and get back to you shortly.\"",
-      confidence: 0.3,
+      type: "professional",
+      text: "I understand your question. Let me gather more context to provide a helpful response.",
+      confidence: 0.9,
     },
     {
-      type: "clarifying_question",
-      content:
-        "Could you provide more context about your question so I can give you a better response?",
-      confidence: 0.5,
+      type: "clarifying",
+      text: "Could you provide more details about what you're looking for?",
+      confidence: 0.8,
     },
     {
-      type: "summary",
-      content:
-        "I'm currently experiencing technical difficulties. Please try again in a few moments, or feel free to ask your question in a different way.",
-      confidence: 0.2,
+      type: "collaborative",
+      text: "This sounds like something we could work on together. What are your thoughts?",
+      confidence: 0.7,
     },
   ];
 }
