@@ -90,15 +90,130 @@ Use the `/assistant config` command to configure analysis methods:
 
 ## Architecture
 
+### System Overview
+
+The Slack ChatGPT Assistant Bot follows a modular architecture with clear separation of concerns. Here's how the different services interact:
+
+```mermaid
+graph TB
+    %% External Services
+    Slack[Slack Platform] --> |@mention events| Bot[Slack Bot App]
+    Bot --> |API calls| Slack
+
+    %% Core Application Components
+    Bot --> |HTTP requests| Bolt[Bolt Framework]
+    Bolt --> |event handling| Handlers[Event Handlers]
+    Handlers --> |context analysis| ContextAnalyzer[Context Analyzer Service]
+    ContextAnalyzer --> |conversation history| SlackAPI[Slack API]
+    SlackAPI --> |message data| ContextAnalyzer
+
+    %% AI Integration
+    ContextAnalyzer --> |processed context| ChatGPTService[ChatGPT Service]
+    ChatGPTService --> |API calls| OpenAI[OpenAI API]
+    OpenAI --> |AI suggestions| ChatGPTService
+    ChatGPTService --> |suggestions| SuggestionGenerator[Suggestion Generator]
+
+    %% Response Flow
+    SuggestionGenerator --> |formatted responses| Handlers
+    Handlers --> |ephemeral messages| Bolt
+    Bolt --> |private responses| Slack
+
+    %% Configuration
+    ConfigService[Config Service] --> |user preferences| ContextAnalyzer
+    ConfigService --> |analysis methods| SuggestionGenerator
+
+    %% Middleware
+    RateLimiter[Rate Limiter] --> |request throttling| Bolt
+    ErrorHandler[Error Handler] --> |error management| Handlers
+
+    %% Data Flow
+    subgraph "Data Processing"
+        PrivacyUtils[Privacy Utils] --> |data sanitization| ContextAnalyzer
+        Logger[Logger] --> |logging| Bot
+    end
+
+    %% Styling
+    classDef external fill:#e1f5fe
+    classDef core fill:#f3e5f5
+    classDef service fill:#e8f5e8
+    classDef middleware fill:#fff3e0
+
+    class Slack,OpenAI external
+    class Bot,Bolt,Handlers core
+    class ContextAnalyzer,ChatGPTService,SuggestionGenerator,ConfigService service
+    class RateLimiter,ErrorHandler,PrivacyUtils,Logger middleware
+```
+
+### Component Interaction Flow
+
+#### 1. **User Interaction**
+
+```
+User @mentions bot → Slack Platform → Bolt Framework → Event Handlers
+```
+
+#### 2. **Context Analysis**
+
+```
+Event Handlers → Context Analyzer → Slack API (fetch history) → Process & Filter Data
+```
+
+#### 3. **AI Processing**
+
+```
+Context Analyzer → ChatGPT Service → OpenAI API → Generate Suggestions
+```
+
+#### 4. **Response Generation**
+
+```
+ChatGPT Service → Suggestion Generator → Format Responses → Event Handlers
+```
+
+#### 5. **Response Delivery**
+
+```
+Event Handlers → Bolt Framework → Slack Platform → Private User Response
+```
+
+### Service Responsibilities
+
+| Service                  | Responsibility          | Key Functions                               |
+| ------------------------ | ----------------------- | ------------------------------------------- |
+| **Bolt Framework**       | Slack integration layer | Event routing, API communication            |
+| **Event Handlers**       | Request processing      | Mention handling, command processing        |
+| **Context Analyzer**     | Conversation analysis   | History retrieval, context processing       |
+| **ChatGPT Service**      | AI integration          | OpenAI API communication, prompt management |
+| **Suggestion Generator** | Response formatting     | Multiple suggestion types, formatting       |
+| **Config Service**       | User preferences        | Analysis method configuration               |
+| **Rate Limiter**         | Performance control     | Request throttling, abuse prevention        |
+| **Error Handler**        | Error management        | Graceful failure handling, logging          |
+
+### Data Flow Architecture
+
 ```
 src/
 ├── app.ts                 # Main application entry point
 ├── config/               # Configuration files
+│   ├── environments.ts   # Environment configuration
+│   ├── openai.ts        # OpenAI API configuration
+│   └── slack.ts         # Slack API configuration
 ├── handlers/             # Event and command handlers
+│   ├── mentionHandler.ts # @mention event processing
+│   └── configHandler.ts # Configuration commands
 ├── services/             # Business logic services
-├── utils/                # Utility functions
+│   ├── contextAnalyzer.ts # Conversation context analysis
+│   ├── chatgptService.ts # OpenAI ChatGPT integration
+│   ├── suggestionGenerator.ts # Response suggestion generation
+│   └── configService.ts # User configuration management
 ├── middleware/           # Middleware components
+│   └── rateLimiter.ts   # Request rate limiting
+├── utils/                # Utility functions
+│   ├── errorHandler.ts  # Error handling utilities
+│   ├── logger.ts        # Logging utilities
+│   └── privacyUtils.ts  # Data privacy utilities
 └── types/                # TypeScript type definitions
+    └── index.ts         # Shared type definitions
 ```
 
 ## Environment Variables
