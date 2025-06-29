@@ -1,0 +1,45 @@
+{
+  "name": "slack-chatgpt-assistant",
+  "version": "1.0.0",
+  "description": "Slack bot that uses ChatGPT to analyze conversation context and provide intelligent response suggestions",
+  "main": "dist/app.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "dev": "ts-node src/app.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "clean": "rm -rf dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dreamquality/ai-dev-tasks.git"
+  },
+  "keywords": [
+    "slack",
+    "bot",
+    "chatgpt",
+    "ai",
+    "assistant"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dreamquality/ai-dev-tasks/issues"
+  },
+  "homepage": "https://github.com/dreamquality/ai-dev-tasks#readme",
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.0.7",
+    "dotenv": "^17.0.0",
+    "jest": "^30.0.3",
+    "ts-jest": "^29.4.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@slack/bolt": "^4.4.0",
+    "openai": "^5.8.2"
+  }
+}
