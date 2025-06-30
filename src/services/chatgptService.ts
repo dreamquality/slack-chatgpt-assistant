@@ -1,3 +1,6 @@
+// DEPRECATED: Use geminiService.ts instead for all new AI features.
+// This file is retained for reference and backward compatibility only.
+
 import { createOpenAIClient, openaiConfig } from "../config/openai";
 
 export interface ChatGPTResponse {

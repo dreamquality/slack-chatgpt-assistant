@@ -1,4 +1,4 @@
-import { generateResponse } from "./chatgptService";
+import { generateResponse } from "./geminiService";
 
 export interface Suggestion {
   type: "assertive" | "clarifying" | "collaborative" | "professional";
