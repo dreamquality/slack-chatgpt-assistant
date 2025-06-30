@@ -4,7 +4,6 @@ exports.PersonalityHandler = void 0;
 exports.registerPersonalityHandler = registerPersonalityHandler;
 const personalityAnalyzer_1 = require("../services/personalityAnalyzer");
 const profileGenerator_1 = require("../services/profileGenerator");
-const privacyUtils_1 = require("../utils/privacyUtils");
 const logger_1 = require("../utils/logger");
 class PersonalityHandler {
     constructor() {
@@ -61,7 +60,7 @@ class PersonalityHandler {
                 messageCount: history.messages.length,
                 action: "fetch_history",
             });
-            const participants = this.extractParticipants(history.messages);
+            const participants = await this.extractParticipants(history.messages, slackClient);
             logger_1.logger.debug("Extracted participants", {
                 channel,
                 user,
@@ -110,19 +109,31 @@ class PersonalityHandler {
                 action: "generate_profiles",
             });
             const report = this.generator.generateReport(profiles);
-            const privacyText = (0, privacyUtils_1.createPrivacyIndicator)();
-            const fullText = `${privacyText}\n\n${report.text}`;
+            if (!report.text || report.text.trim() === "") {
+                logger_1.logger.error("Empty report generated", {
+                    channel,
+                    user,
+                    participantCount: participants.length,
+                    action: "generate_report",
+                });
+                await slackClient.chat.postEphemeral({
+                    channel,
+                    user,
+                    text: "❌ *API Error*: Unable to analyze personalities at the moment. This could be due to:\n• API rate limit exceeded\n• Service temporarily unavailable\n• Insufficient conversation data\n\nPlease try again later or contact support if the issue persists.",
+                });
+                return;
+            }
             logger_1.logger.debug("Sending personality analysis response", {
                 channel,
                 user,
                 profileCount: profiles.length,
-                textLength: fullText.length,
+                textLength: report.text.length,
                 action: "send_response",
             });
             await slackClient.chat.postEphemeral({
                 channel,
                 user,
-                text: fullText,
+                text: report.text,
                 blocks: report.blocks,
             });
             const duration = Date.now() - startTime;
@@ -151,16 +162,33 @@ class PersonalityHandler {
             });
         }
     }
-    extractParticipants(messages) {
+    async extractParticipants(messages, slackClient) {
         const participantMap = new Map();
         for (const message of messages) {
             if (message.bot_id)
                 continue;
             const userId = message.user;
             if (!participantMap.has(userId)) {
+                let userName = `User ${userId}`;
+                try {
+                    const userInfo = await slackClient.users.info({ user: userId });
+                    if (userInfo.user && userInfo.user.real_name) {
+                        userName = userInfo.user.real_name;
+                    }
+                    else if (userInfo.user && userInfo.user.name) {
+                        userName = userInfo.user.name;
+                    }
+                }
+                catch (error) {
+                    logger_1.logger.warn("Failed to fetch user info", {
+                        userId,
+                        error: error instanceof Error ? error.message : String(error),
+                        action: "fetch_user_info",
+                    });
+                }
                 participantMap.set(userId, {
                     userId,
-                    userName: message.username || `User ${userId}`,
+                    userName,
                     messageCount: 0,
                     messages: [],
                 });
@@ -211,7 +239,7 @@ function registerPersonalityHandler(app) {
                 });
                 return;
             }
-            const participants = handler["extractParticipants"](history.messages);
+            const participants = await handler["extractParticipants"](history.messages, app.client);
             logger_1.logger.debug("Extracted participants for command", {
                 channel: channelId,
                 user: command.user_id,
@@ -238,18 +266,52 @@ function registerPersonalityHandler(app) {
                 action: "analyze_personalities",
             });
             const profiles = await handler["analyzer"].analyzePersonalities(participants);
+            logger_1.logger.info("Received profiles from analyzer", {
+                channel: channelId,
+                user: command.user_id,
+                profileCount: profiles.length,
+                profiles: profiles.map((p) => ({
+                    userId: p.userId,
+                    userName: p.userName,
+                })),
+                action: "received_profiles",
+            });
+            if (profiles.length === 0) {
+                logger_1.logger.error("No personality profiles generated for command", {
+                    channel: channelId,
+                    user: command.user_id,
+                    participantCount: participants.length,
+                    action: "analyze_personalities",
+                });
+                await respond({
+                    text: "❌ *API Error*: Unable to analyze personalities at the moment. This could be due to:\n• API rate limit exceeded\n• Service temporarily unavailable\n• Insufficient conversation data\n\nPlease try again later or contact support if the issue persists.",
+                    response_type: "ephemeral",
+                });
+                return;
+            }
             const report = handler["generator"].generateReport(profiles);
-            const privacyText = (0, privacyUtils_1.createPrivacyIndicator)();
-            const fullText = `${privacyText}\n\n${report.text}`;
+            if (!report.text || report.text.trim() === "") {
+                logger_1.logger.error("Empty report generated for command", {
+                    channel: channelId,
+                    user: command.user_id,
+                    participantCount: participants.length,
+                    action: "generate_report",
+                });
+                await respond({
+                    text: "❌ *API Error*: Unable to analyze personalities at the moment. This could be due to:\n• API rate limit exceeded\n• Service temporarily unavailable\n• Insufficient conversation data\n\nPlease try again later or contact support if the issue persists.",
+                    response_type: "ephemeral",
+                });
+                return;
+            }
             logger_1.logger.debug("Sending personality analysis response for command", {
                 channel: channelId,
                 user: command.user_id,
                 profileCount: profiles.length,
-                textLength: fullText.length,
+                textLength: report.text.length,
                 action: "send_response",
             });
             await respond({
-                text: fullText,
+                text: report.text,
                 blocks: report.blocks,
                 response_type: "ephemeral",
             });
@@ -272,8 +334,12 @@ function registerPersonalityHandler(app) {
                 duration,
                 action: "handle_command",
             });
+            const errorMessage = error instanceof Error ? error.message : String(error);
             await respond({
-                text: "Sorry, I encountered an error while analyzing personalities. Please try again later.",
+                text: `❌ *Error analyzing personalities:*
+>${errorMessage}
+
+Please try again later or contact support if the issue persists.`,
                 response_type: "ephemeral",
             });
         }

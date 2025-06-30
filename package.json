@@ -1,7 +1,7 @@
 {
-  "name": "slack-chatgpt-assistant",
+  "name": "slack-gemimi-assistant",
   "version": "1.0.0",
-  "description": "Slack bot that uses ChatGPT to analyze conversation context and provide intelligent response suggestions",
+  "description": "Slack bot that uses Gemimi to analyze conversation context and provide intelligent response suggestions",
   "main": "dist/app.js",
   "scripts": {
     "build": "tsc",

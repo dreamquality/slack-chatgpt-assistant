@@ -81,6 +81,18 @@ export class PersonalityAnalyzer {
       action: "analyze_personalities",
     });
 
+    // If no profiles were generated, throw an error
+    if (profiles.length === 0) {
+      logger.error("No personality profiles could be generated", {
+        participantCount: participants.length,
+        duration,
+        action: "analyze_personalities",
+      });
+      throw new Error(
+        "Failed to analyze any participants. All API calls failed."
+      );
+    }
+
     return profiles;
   }
 
@@ -89,7 +101,7 @@ export class PersonalityAnalyzer {
   ): Promise<PersonalityProfile> {
     const startTime = Date.now();
 
-    logger.debug("Building personality analysis prompt", {
+    logger.info("Building personality analysis prompt", {
       userId: participant.userId,
       messageCount: participant.messages.length,
       action: "build_prompt",
@@ -97,7 +109,7 @@ export class PersonalityAnalyzer {
 
     const prompt = this.buildPersonalityAnalysisPrompt(participant);
 
-    logger.debug("Generating response from Gemini", {
+    logger.info("Generating response from Gemini", {
       userId: participant.userId,
       promptLength: prompt.length,
       action: "generate_response",
@@ -105,10 +117,10 @@ export class PersonalityAnalyzer {
 
     const response = await generateResponse(prompt, participant.userId);
 
-    logger.debug("Parsing personality response", {
+    logger.info("Raw Gemini response", {
       userId: participant.userId,
-      responseLength: response.content.length,
-      action: "parse_response",
+      response: response.content,
+      action: "raw_gemini_response",
     });
 
     const profile = this.parsePersonalityResponse(
@@ -116,8 +128,14 @@ export class PersonalityAnalyzer {
       participant
     );
 
+    logger.info("Parsed personality profile", {
+      userId: participant.userId,
+      profile,
+      action: "parsed_personality_profile",
+    });
+
     const duration = Date.now() - startTime;
-    logger.debug("Completed single personality analysis", {
+    logger.info("Completed single personality analysis", {
       userId: participant.userId,
       duration,
       action: "analyze_single_personality",
@@ -148,7 +166,66 @@ export class PersonalityAnalyzer {
     participant: ConversationParticipant
   ): PersonalityProfile {
     try {
-      const parsed = JSON.parse(response);
+      // Handle markdown-wrapped JSON responses from Gemini
+      let jsonContent = response.trim();
+
+      // Remove all code block markers and 'json' language hints
+      if (jsonContent.startsWith("```")) {
+        jsonContent = jsonContent.replace(/```json|```/gi, "").trim();
+      }
+
+      // Find the first complete JSON object by looking for matching braces
+      const firstBrace = jsonContent.indexOf("{");
+      if (firstBrace !== -1) {
+        let braceCount = 0;
+        let endBrace = -1;
+
+        for (let i = firstBrace; i < jsonContent.length; i++) {
+          if (jsonContent[i] === "{") {
+            braceCount++;
+          } else if (jsonContent[i] === "}") {
+            braceCount--;
+            if (braceCount === 0) {
+              endBrace = i;
+              break;
+            }
+          }
+        }
+
+        if (endBrace !== -1) {
+          jsonContent = jsonContent.substring(firstBrace, endBrace + 1);
+        }
+      }
+
+      // Additional cleanup: remove any markdown formatting that might remain
+      jsonContent = jsonContent.replace(/\*\*[^*]+\*\*/g, ""); // Remove **bold** text
+      jsonContent = jsonContent.replace(/\*[^*]+\*/g, ""); // Remove *italic* text
+      jsonContent = jsonContent.replace(/^[^{]*/, ""); // Remove anything before first {
+      jsonContent = jsonContent.replace(/}[^}]*$/, "}"); // Remove anything after last }
+
+      // Remove any remaining markdown headers or formatting
+      jsonContent = jsonContent.replace(/^#+\s*.*$/gm, ""); // Remove markdown headers
+      jsonContent = jsonContent.replace(/^\*\*.*\*\*$/gm, ""); // Remove bold lines
+      jsonContent = jsonContent.replace(/^\*.*\*$/gm, ""); // Remove italic lines
+
+      // Clean up any extra whitespace and newlines
+      jsonContent = jsonContent
+        .replace(/\n+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      logger.info("Extracted JSON content", {
+        userId: participant.userId,
+        jsonContent,
+        action: "extract_json",
+      });
+
+      const parsed = JSON.parse(jsonContent);
+      logger.info("Parsed Gemini JSON", {
+        userId: participant.userId,
+        parsed,
+        action: "parsed_gemini_json",
+      });
       return {
         userId: participant.userId,
         userName: participant.userName,
@@ -165,6 +242,17 @@ export class PersonalityAnalyzer {
         recommendations: parsed.recommendations || [],
       };
     } catch (error) {
+      logger.error(
+        "Failed to parse personality response, using default values",
+        {
+          userId: participant.userId,
+          userName: participant.userName,
+          error: error instanceof Error ? error.message : String(error),
+          response: response.substring(0, 200) + "...",
+          action: "parse_personality_response",
+        }
+      );
+
       // Return default profile if parsing fails
       return {
         userId: participant.userId,

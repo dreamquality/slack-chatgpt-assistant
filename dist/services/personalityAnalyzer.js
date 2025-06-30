@@ -51,30 +51,43 @@ class PersonalityAnalyzer {
             duration,
             action: "analyze_personalities",
         });
+        if (profiles.length === 0) {
+            logger_1.logger.error("No personality profiles could be generated", {
+                participantCount: participants.length,
+                duration,
+                action: "analyze_personalities",
+            });
+            throw new Error("Failed to analyze any participants. All API calls failed.");
+        }
         return profiles;
     }
     async analyzeSinglePersonality(participant) {
         const startTime = Date.now();
-        logger_1.logger.debug("Building personality analysis prompt", {
+        logger_1.logger.info("Building personality analysis prompt", {
             userId: participant.userId,
             messageCount: participant.messages.length,
             action: "build_prompt",
         });
         const prompt = this.buildPersonalityAnalysisPrompt(participant);
-        logger_1.logger.debug("Generating response from Gemini", {
+        logger_1.logger.info("Generating response from Gemini", {
             userId: participant.userId,
             promptLength: prompt.length,
             action: "generate_response",
         });
         const response = await (0, geminiService_1.generateResponse)(prompt, participant.userId);
-        logger_1.logger.debug("Parsing personality response", {
+        logger_1.logger.info("Raw Gemini response", {
             userId: participant.userId,
-            responseLength: response.content.length,
-            action: "parse_response",
+            response: response.content,
+            action: "raw_gemini_response",
         });
         const profile = this.parsePersonalityResponse(response.content, participant);
+        logger_1.logger.info("Parsed personality profile", {
+            userId: participant.userId,
+            profile,
+            action: "parsed_personality_profile",
+        });
         const duration = Date.now() - startTime;
-        logger_1.logger.debug("Completed single personality analysis", {
+        logger_1.logger.info("Completed single personality analysis", {
             userId: participant.userId,
             duration,
             action: "analyze_single_personality",
@@ -87,7 +100,52 @@ class PersonalityAnalyzer {
     }
     parsePersonalityResponse(response, participant) {
         try {
-            const parsed = JSON.parse(response);
+            let jsonContent = response.trim();
+            if (jsonContent.startsWith("```")) {
+                jsonContent = jsonContent.replace(/```json|```/gi, "").trim();
+            }
+            const firstBrace = jsonContent.indexOf("{");
+            if (firstBrace !== -1) {
+                let braceCount = 0;
+                let endBrace = -1;
+                for (let i = firstBrace; i < jsonContent.length; i++) {
+                    if (jsonContent[i] === "{") {
+                        braceCount++;
+                    }
+                    else if (jsonContent[i] === "}") {
+                        braceCount--;
+                        if (braceCount === 0) {
+                            endBrace = i;
+                            break;
+                        }
+                    }
+                }
+                if (endBrace !== -1) {
+                    jsonContent = jsonContent.substring(firstBrace, endBrace + 1);
+                }
+            }
+            jsonContent = jsonContent.replace(/\*\*[^*]+\*\*/g, "");
+            jsonContent = jsonContent.replace(/\*[^*]+\*/g, "");
+            jsonContent = jsonContent.replace(/^[^{]*/, "");
+            jsonContent = jsonContent.replace(/}[^}]*$/, "}");
+            jsonContent = jsonContent.replace(/^#+\s*.*$/gm, "");
+            jsonContent = jsonContent.replace(/^\*\*.*\*\*$/gm, "");
+            jsonContent = jsonContent.replace(/^\*.*\*$/gm, "");
+            jsonContent = jsonContent
+                .replace(/\n+/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+            logger_1.logger.info("Extracted JSON content", {
+                userId: participant.userId,
+                jsonContent,
+                action: "extract_json",
+            });
+            const parsed = JSON.parse(jsonContent);
+            logger_1.logger.info("Parsed Gemini JSON", {
+                userId: participant.userId,
+                parsed,
+                action: "parsed_gemini_json",
+            });
             return {
                 userId: participant.userId,
                 userName: participant.userName,
@@ -105,6 +163,13 @@ class PersonalityAnalyzer {
             };
         }
         catch (error) {
+            logger_1.logger.error("Failed to parse personality response, using default values", {
+                userId: participant.userId,
+                userName: participant.userName,
+                error: error instanceof Error ? error.message : String(error),
+                response: response.substring(0, 200) + "...",
+                action: "parse_personality_response",
+            });
             return {
                 userId: participant.userId,
                 userName: participant.userName,

@@ -7,6 +7,14 @@ export interface ProfileReport {
 
 export class ProfileGenerator {
   generateReport(profiles: PersonalityProfile[]): ProfileReport {
+    // Return empty report if no profiles
+    if (profiles.length === 0) {
+      return {
+        text: "",
+        blocks: [],
+      };
+    }
+
     let text = "🎭 *Personality Profile Analysis*\n\n";
     const blocks = [
       {
@@ -20,10 +28,6 @@ export class ProfileGenerator {
         type: "divider",
       },
     ];
-
-    if (profiles.length === 0) {
-      return { text, blocks };
-    }
 
     for (const profile of profiles) {
       // Add profile section to text

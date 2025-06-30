@@ -1,4 +1,5 @@
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
+import type { StringValue } from "ms";
 
 export class JWTService {
   static generateToken(payload: any): string {
@@ -7,9 +8,11 @@ export class JWTService {
       throw new Error("JWT_SECRET environment variable is not set");
     }
 
-    return jwt.sign(payload, secret, {
-      expiresIn: process.env.JWT_EXPIRES_IN || "24h",
-    });
+    const options: SignOptions = {
+      expiresIn: (process.env.JWT_EXPIRES_IN as StringValue) || "24h",
+    };
+
+    return jwt.sign(payload, secret, options);
   }
 
   static verifyToken(token: string): any {

@@ -25,7 +25,7 @@ const requireAuth = (req, res, next) => {
     }
 };
 exports.requireAuth = requireAuth;
-const optionalAuth = (req, res, next) => {
+const optionalAuth = (req, _res, next) => {
     const token = req.headers.authorization?.replace("Bearer ", "");
     if (token) {
         try {

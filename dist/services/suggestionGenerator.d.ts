@@ -9,8 +9,12 @@ export interface SuggestionContext {
     participantCount: number;
     channelType: "public" | "private" | "direct";
 }
+export interface SuggestionResult {
+    suggestions: Suggestion[];
+    isFallback: boolean;
+}
 export declare class SuggestionGenerator {
-    generateSuggestions(context: SuggestionContext): Promise<Suggestion[]>;
+    generateSuggestions(context: SuggestionContext): Promise<SuggestionResult>;
     private buildSuggestionPrompt;
     private parseSuggestions;
     private generateFallbackSuggestions;

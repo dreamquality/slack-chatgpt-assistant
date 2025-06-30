@@ -14,8 +14,15 @@ export interface SuggestionContext {
   channelType: "public" | "private" | "direct";
 }
 
+export interface SuggestionResult {
+  suggestions: Suggestion[];
+  isFallback: boolean;
+}
+
 export class SuggestionGenerator {
-  async generateSuggestions(context: SuggestionContext): Promise<Suggestion[]> {
+  async generateSuggestions(
+    context: SuggestionContext
+  ): Promise<SuggestionResult> {
     const startTime = Date.now();
 
     logger.info("Generating response suggestions", {
@@ -50,7 +57,10 @@ export class SuggestionGenerator {
         action: "generate_suggestions",
       });
 
-      return suggestions;
+      return {
+        suggestions,
+        isFallback: false,
+      };
     } catch (error) {
       const duration = Date.now() - startTime;
       logger.error("Failed to generate suggestions", {
@@ -60,7 +70,13 @@ export class SuggestionGenerator {
       });
 
       // Return fallback suggestions
-      return this.generateFallbackSuggestions(context.question);
+      const fallbackSuggestions = this.generateFallbackSuggestions(
+        context.question
+      );
+      return {
+        suggestions: fallbackSuggestions,
+        isFallback: true,
+      };
     }
   }
 
@@ -121,7 +137,54 @@ Guidelines:
       "summary",
     ];
     try {
-      const parsed = JSON.parse(response);
+      let jsonContent = response.trim();
+
+      // Remove all code block markers and 'json' language hints
+      if (jsonContent.startsWith("```")) {
+        jsonContent = jsonContent.replace(/```json|```/gi, "").trim();
+      }
+
+      // Find the first complete JSON array by looking for matching brackets
+      const firstBracket = jsonContent.indexOf("[");
+      if (firstBracket !== -1) {
+        let bracketCount = 0;
+        let endBracket = -1;
+
+        for (let i = firstBracket; i < jsonContent.length; i++) {
+          if (jsonContent[i] === "[") {
+            bracketCount++;
+          } else if (jsonContent[i] === "]") {
+            bracketCount--;
+            if (bracketCount === 0) {
+              endBracket = i;
+              break;
+            }
+          }
+        }
+
+        if (endBracket !== -1) {
+          jsonContent = jsonContent.substring(firstBracket, endBracket + 1);
+        }
+      }
+
+      // Additional cleanup: remove any markdown formatting that might remain
+      jsonContent = jsonContent.replace(/\*\*[^*]+\*\*/g, ""); // Remove **bold** text
+      jsonContent = jsonContent.replace(/\*[^*]+\*/g, ""); // Remove *italic* text
+      jsonContent = jsonContent.replace(/^[^\[]*/, ""); // Remove anything before first [
+      jsonContent = jsonContent.replace(/\][^\]]*$/, "]"); // Remove anything after last ]
+
+      // Remove any remaining markdown headers or formatting
+      jsonContent = jsonContent.replace(/^#+\s*.*$/gm, ""); // Remove markdown headers
+      jsonContent = jsonContent.replace(/^\*\*.*\*\*$/gm, ""); // Remove bold lines
+      jsonContent = jsonContent.replace(/^\*.*\*$/gm, ""); // Remove italic lines
+
+      // Clean up any extra whitespace and newlines
+      jsonContent = jsonContent
+        .replace(/\n+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const parsed = JSON.parse(jsonContent);
 
       if (!Array.isArray(parsed)) {
         throw new Error("Response is not an array");

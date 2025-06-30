@@ -31,7 +31,10 @@ class SuggestionGenerator {
                 duration,
                 action: "generate_suggestions",
             });
-            return suggestions;
+            return {
+                suggestions,
+                isFallback: false,
+            };
         }
         catch (error) {
             const duration = Date.now() - startTime;
@@ -40,7 +43,11 @@ class SuggestionGenerator {
                 duration,
                 action: "generate_suggestions",
             });
-            return this.generateFallbackSuggestions(context.question);
+            const fallbackSuggestions = this.generateFallbackSuggestions(context.question);
+            return {
+                suggestions: fallbackSuggestions,
+                isFallback: true,
+            };
         }
     }
     buildSuggestionPrompt(context) {
@@ -89,13 +96,54 @@ Guidelines:
 - Focus on being helpful and constructive`;
     }
     parseSuggestions(response) {
+        const validTypes = [
+            "template",
+            "improvement",
+            "clarifying_question",
+            "summary",
+        ];
         try {
-            const parsed = JSON.parse(response);
+            let jsonContent = response.trim();
+            if (jsonContent.startsWith("```")) {
+                jsonContent = jsonContent.replace(/```json|```/gi, "").trim();
+            }
+            const firstBracket = jsonContent.indexOf("[");
+            if (firstBracket !== -1) {
+                let bracketCount = 0;
+                let endBracket = -1;
+                for (let i = firstBracket; i < jsonContent.length; i++) {
+                    if (jsonContent[i] === "[") {
+                        bracketCount++;
+                    }
+                    else if (jsonContent[i] === "]") {
+                        bracketCount--;
+                        if (bracketCount === 0) {
+                            endBracket = i;
+                            break;
+                        }
+                    }
+                }
+                if (endBracket !== -1) {
+                    jsonContent = jsonContent.substring(firstBracket, endBracket + 1);
+                }
+            }
+            jsonContent = jsonContent.replace(/\*\*[^*]+\*\*/g, "");
+            jsonContent = jsonContent.replace(/\*[^*]+\*/g, "");
+            jsonContent = jsonContent.replace(/^[^\[]*/, "");
+            jsonContent = jsonContent.replace(/\][^\]]*$/, "]");
+            jsonContent = jsonContent.replace(/^#+\s*.*$/gm, "");
+            jsonContent = jsonContent.replace(/^\*\*.*\*\*$/gm, "");
+            jsonContent = jsonContent.replace(/^\*.*\*$/gm, "");
+            jsonContent = jsonContent
+                .replace(/\n+/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+            const parsed = JSON.parse(jsonContent);
             if (!Array.isArray(parsed)) {
                 throw new Error("Response is not an array");
             }
             return parsed
-                .filter((item) => item.type &&
+                .filter((item) => validTypes.includes(item.type) &&
                 item.content &&
                 typeof item.confidence === "number" &&
                 item.confidence >= 0.1 &&

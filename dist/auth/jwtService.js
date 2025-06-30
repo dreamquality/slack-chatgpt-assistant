@@ -7,12 +7,21 @@ exports.JWTService = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 class JWTService {
     static generateToken(payload) {
-        return jsonwebtoken_1.default.sign(payload, process.env.JWT_SECRET, {
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+            throw new Error("JWT_SECRET environment variable is not set");
+        }
+        const options = {
             expiresIn: process.env.JWT_EXPIRES_IN || "24h",
-        });
+        };
+        return jsonwebtoken_1.default.sign(payload, secret, options);
     }
     static verifyToken(token) {
-        return jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+            throw new Error("JWT_SECRET environment variable is not set");
+        }
+        return jsonwebtoken_1.default.verify(token, secret);
     }
     static decodeToken(token) {
         return jsonwebtoken_1.default.decode(token);

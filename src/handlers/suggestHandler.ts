@@ -1,7 +1,6 @@
 import { App } from "@slack/bolt";
 import { SuggestionGenerator } from "../services/suggestionGenerator";
 import { logger } from "../utils/logger";
-import { createPrivacyIndicator } from "../utils/privacyUtils";
 
 export class SuggestHandler {
   private suggestionGenerator: SuggestionGenerator;
@@ -94,14 +93,15 @@ export class SuggestHandler {
         action: "generate_suggestions",
       });
 
-      const suggestions = await this.suggestionGenerator.generateSuggestions({
-        question,
-        conversationHistory,
-        participantCount,
-        channelType,
-      });
+      const suggestionResult =
+        await this.suggestionGenerator.generateSuggestions({
+          question,
+          conversationHistory,
+          participantCount,
+          channelType,
+        });
 
-      if (suggestions.length === 0) {
+      if (suggestionResult.suggestions.length === 0) {
         logger.error("No suggestions generated for suggest command", {
           channel: channel_id,
           user: user_id,
@@ -118,15 +118,17 @@ export class SuggestHandler {
 
       // Format suggestions for Slack
       const formattedResponse = this.formatSuggestionsForSlack(
-        suggestions,
-        question
+        suggestionResult.suggestions,
+        question,
+        suggestionResult.isFallback
       );
 
       logger.debug("Sending response suggestions for suggest command", {
         channel: channel_id,
         user: user_id,
-        suggestionCount: suggestions.length,
+        suggestionCount: suggestionResult.suggestions.length,
         responseLength: formattedResponse.length,
+        isFallback: suggestionResult.isFallback,
         action: "send_response",
       });
 
@@ -141,7 +143,8 @@ export class SuggestHandler {
       logger.info("Successfully handled suggest command", {
         channel: channel_id,
         user: user_id,
-        suggestionCount: suggestions.length,
+        suggestionCount: suggestionResult.suggestions.length,
+        isFallback: suggestionResult.isFallback,
         duration,
         action: "handle_suggest_command",
       });
@@ -155,10 +158,36 @@ export class SuggestHandler {
         action: "handle_suggest_command",
       });
 
+      // Check for specific API errors
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      let userMessage =
+        "❌ *Error*: Failed to generate response suggestions. Please try again later.";
+
+      if (
+        errorMessage.includes("Rate limit exceeded") ||
+        errorMessage.includes("429")
+      ) {
+        userMessage =
+          "❌ *API Rate Limit*: Too many requests. Please wait a moment and try again.";
+      } else if (
+        errorMessage.includes("Service Unavailable") ||
+        errorMessage.includes("503")
+      ) {
+        userMessage =
+          "❌ *Service Unavailable*: The AI service is temporarily overloaded. Please try again in a few minutes.";
+      } else if (
+        errorMessage.includes("quota") ||
+        errorMessage.includes("billing")
+      ) {
+        userMessage =
+          "❌ *API Quota Exceeded*: Daily API limit reached. Please try again tomorrow or contact support.";
+      }
+
       await client.chat.postEphemeral({
         channel: command.channel_id,
         user: command.user_id,
-        text: "❌ *Error*: Failed to generate response suggestions. Please try again later.",
+        text: userMessage,
       });
     }
   }
@@ -203,11 +232,15 @@ export class SuggestHandler {
 
   private formatSuggestionsForSlack(
     suggestions: any[],
-    question: string
+    question: string,
+    isFallback: boolean = false
   ): string {
-    const privacyText = createPrivacyIndicator();
+    let formattedText = "";
 
-    let formattedText = `${privacyText}\n\n`;
+    if (isFallback) {
+      formattedText += `*❌ API Error - Using Fallback Suggestions*\n\n`;
+    }
+
     formattedText += `*🤖 Response Suggestions*\n\n`;
     formattedText += `*Question:* "${question}"\n\n`;
 
@@ -220,8 +253,13 @@ export class SuggestHandler {
       formattedText += `${suggestion.content}\n\n`;
     });
 
-    formattedText +=
-      "_💡 These are suggestions only. Choose the approach that best fits your situation._";
+    if (isFallback) {
+      formattedText +=
+        "_⚠️ These are basic fallback suggestions due to API issues. Please try again later for more personalized suggestions._";
+    } else {
+      formattedText +=
+        "_💡 These are suggestions only. Choose the approach that best fits your situation._";
+    }
 
     return formattedText;
   }

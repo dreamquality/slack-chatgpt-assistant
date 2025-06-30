@@ -3,6 +3,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProfileGenerator = void 0;
 class ProfileGenerator {
     generateReport(profiles) {
+        if (profiles.length === 0) {
+            return {
+                text: "",
+                blocks: [],
+            };
+        }
         let text = "🎭 *Personality Profile Analysis*\n\n";
         const blocks = [
             {
@@ -16,9 +22,6 @@ class ProfileGenerator {
                 type: "divider",
             },
         ];
-        if (profiles.length === 0) {
-            return { text, blocks };
-        }
         for (const profile of profiles) {
             text += `*${profile.userName}*\n`;
             text += `Communication Style: ${profile.communicationStyle}\n`;
