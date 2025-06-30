@@ -1,0 +1,1 @@
+{"version":3,"file":"ssoHandler.d.ts","sourceRoot":"","sources":["../../src/handlers/ssoHandler.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,GAAG,EAAE,MAAM,aAAa,CAAC;AAGlC,qBAAa,UAAU;IACrB,OAAO,CAAC,WAAW,CAAoB;;IAMjC,SAAS,CAAC,GAAG,EAAE,GAAG,EAAE,GAAG,EAAE,GAAG;IA8B5B,YAAY,CAAC,IAAI,EAAE,GAAG,EAAE,GAAG,EAAE,GAAG;CAMvC;AAED,wBAAgB,kBAAkB,CAAC,GAAG,EAAE,GAAG,QAwC1C"}

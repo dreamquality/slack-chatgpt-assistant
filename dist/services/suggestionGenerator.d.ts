@@ -1,14 +1,19 @@
 export interface Suggestion {
-    type: "assertive" | "clarifying" | "collaborative" | "professional";
-    text: string;
+    type: "template" | "improvement" | "clarifying_question" | "summary";
+    content: string;
     confidence: number;
 }
-export interface SuggestionResponse {
-    suggestions: Suggestion[];
-    contextSummary: string;
-    analysisMethod: string;
+export interface SuggestionContext {
+    question: string;
+    conversationHistory: string[];
+    participantCount: number;
+    channelType: "public" | "private" | "direct";
 }
-export declare function generateSuggestions(context: string, userQuestion: string, analysisMethod?: string): Promise<SuggestionResponse>;
-export declare function formatSuggestionsForSlack(suggestions: Suggestion[]): string;
-export declare function getFallbackSuggestions(): Suggestion[];
+export declare class SuggestionGenerator {
+    generateSuggestions(context: SuggestionContext): Promise<Suggestion[]>;
+    private buildSuggestionPrompt;
+    private parseSuggestions;
+    private generateFallbackSuggestions;
+    getSuggestionColor(type: Suggestion["type"]): string;
+}
 //# sourceMappingURL=suggestionGenerator.d.ts.map

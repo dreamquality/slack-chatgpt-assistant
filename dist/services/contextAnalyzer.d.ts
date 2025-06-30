@@ -6,7 +6,7 @@ export interface ConversationHistoryOptions {
     limit?: number;
     thread_ts?: string;
 }
-export declare function fetchConversationHistory(client: WebClient, options: ConversationHistoryOptions): Promise<import("@slack/web-api/dist/types/response/ConversationsRepliesResponse").MessageElement[] | import("@slack/web-api/dist/types/response/ConversationsHistoryResponse").MessageElement[]>;
+export declare function fetchConversationHistory(client: WebClient, options: ConversationHistoryOptions): Promise<import("@slack/web-api/dist/types/response/ConversationsHistoryResponse").MessageElement[] | import("@slack/web-api/dist/types/response/ConversationsRepliesResponse").MessageElement[]>;
 export declare function fetchMonthHistory(client: WebClient, channel: string, thread_ts?: string, maxDays?: number, maxMessages?: number): Promise<any[]>;
 export interface ProcessedMessage {
     user: string;

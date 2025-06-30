@@ -1,5 +1,6 @@
 import { createSlackApp } from "./config/slack";
 import { registerMentionHandler } from "./handlers/mentionHandler";
+import { registerSuggestHandler } from "./handlers/suggestHandler";
 import { registerConfigHandler } from "./handlers/configHandler";
 import { registerPersonalityHandler } from "./handlers/personalityHandler";
 import { registerSSOHandler } from "./handlers/ssoHandler";
@@ -83,6 +84,7 @@ export function createApp(): App {
   // Register event handlers
   app.event("app_mention", rateLimiter);
   registerMentionHandler(app);
+  registerSuggestHandler(app);
   registerConfigHandler(app);
   registerPersonalityHandler(app);
   registerSSOHandler(app);

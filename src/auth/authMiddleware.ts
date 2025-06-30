@@ -1,41 +1,50 @@
 import { Request, Response, NextFunction } from "express";
-import { JWTService } from "./jwtService";
+import { GoogleAuthService } from "./googleAuthService";
 
 export const requireAuth = (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
-  const token =
-    req.cookies?.jwt || req.headers.authorization?.replace("Bearer ", "");
+): void => {
+  const token = req.headers.authorization?.replace("Bearer ", "");
 
   if (!token) {
-    return res.status(401).json({ error: "Authentication required" });
+    res.status(401).json({
+      success: false,
+      error: "No token provided",
+    });
+    return;
   }
 
   try {
-    const decoded = JWTService.verifyToken(token);
-    (req as any).user = decoded;
+    const authService = new GoogleAuthService();
+    const user = authService.verifyJWT(token);
+
+    // Add user to request object
+    (req as any).user = user;
     next();
   } catch (error) {
-    res.status(401).json({ error: "Invalid token" });
+    res.status(401).json({
+      success: false,
+      error: "Invalid token",
+    });
   }
 };
 
 export const optionalAuth = (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
-) => {
-  const token =
-    req.cookies?.jwt || req.headers.authorization?.replace("Bearer ", "");
+): void => {
+  const token = req.headers.authorization?.replace("Bearer ", "");
 
   if (token) {
     try {
-      const decoded = JWTService.verifyToken(token);
-      (req as any).user = decoded;
+      const authService = new GoogleAuthService();
+      const user = authService.verifyJWT(token);
+      (req as any).user = user;
     } catch (error) {
-      // Token is invalid, but we continue without auth
+      // Token is invalid, but we continue without authentication
     }
   }
 

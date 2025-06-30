@@ -1,6 +1,6 @@
 # Local Testing Guide
 
-This guide will help you set up and test the Slack ChatGPT Assistant Bot locally.
+This guide will help you set up and test the Slack Personality & Response Assistant Bot locally.
 
 ## 🚀 Quick Start
 
@@ -20,16 +20,29 @@ This guide will help you set up and test the Slack ChatGPT Assistant Bot locally
    SLACK_SIGNING_SECRET=your-signing-secret-here
    SLACK_APP_TOKEN=xapp-your-app-token-here
 
-   # OpenAI Configuration
-   OPENAI_API_KEY=sk-your-openai-api-key-here
-   OPENAI_MODEL=gpt-4
-   OPENAI_MAX_TOKENS=2000
-   OPENAI_TEMPERATURE=0.7
+   # Google Gemini Configuration
+   GEMINI_API_KEY=your-gemini-api-key-here
+   GEMINI_MODEL=gemini-2.0-flash-exp
+   GEMINI_MAX_TOKENS=2000
+   GEMINI_TEMPERATURE=0.7
+
+   # Google OAuth2 Configuration
+   GOOGLE_CLIENT_ID=your-google-client-id-here
+   GOOGLE_CLIENT_SECRET=your-google-client-secret-here
+   GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
+
+   # JWT Configuration
+   JWT_SECRET=your-jwt-secret-key-here
+   JWT_EXPIRES_IN=24h
 
    # Application Configuration
    NODE_ENV=development
    PORT=3000
    LOG_LEVEL=debug
+
+   # Rate Limiting
+   RATE_LIMIT_WINDOW_MS=60000
+   RATE_LIMIT_MAX_REQUESTS=10
    ```
 
 ### 2. **Install Dependencies**
@@ -52,13 +65,68 @@ npm start
 
 The bot will start on `http://localhost:3000`
 
+## 🔧 Google Cloud Setup
+
+### 1. **Create a Google Cloud Project**
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Click "Select a project" → "New Project"
+3. Name your project (e.g., "Slack Personality Bot")
+4. Click "Create"
+
+### 2. **Enable Gemini API**
+
+1. In your Google Cloud project, go to "APIs & Services" → "Library"
+2. Search for "Gemini API"
+3. Click on "Gemini API" and click "Enable"
+4. Go to "APIs & Services" → "Credentials"
+5. Click "Create Credentials" → "API Key"
+6. Copy the API key and add it to your `.env` file as `GEMINI_API_KEY`
+
+### 3. **Set up Google OAuth2**
+
+1. Go to "APIs & Services" → "Credentials"
+2. Click "Create Credentials" → "OAuth 2.0 Client IDs"
+3. If prompted, configure the OAuth consent screen:
+
+   - User Type: External
+   - App name: "Slack Personality Bot"
+   - User support email: Your email
+   - Developer contact information: Your email
+   - Save and continue through the remaining steps
+
+4. Create OAuth 2.0 Client ID:
+
+   - Application type: Web application
+   - Name: "Slack Personality Bot Local"
+   - Authorized redirect URIs: `http://localhost:3000/auth/google/callback`
+   - Click "Create"
+
+5. Copy the Client ID and Client Secret to your `.env` file:
+   - `GOOGLE_CLIENT_ID=your-client-id`
+   - `GOOGLE_CLIENT_SECRET=your-client-secret`
+
+### 4. **Generate JWT Secret**
+
+Generate a secure JWT secret:
+
+```bash
+# Option 1: Using Node.js
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+
+# Option 2: Using OpenSSL
+openssl rand -hex 64
+```
+
+Add the generated secret to your `.env` file as `JWT_SECRET`.
+
 ## 🔧 Slack App Setup
 
 ### 1. **Create a Slack App**
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps)
 2. Click "Create New App" → "From scratch"
-3. Name your app (e.g., "ChatGPT Assistant")
+3. Name your app (e.g., "Personality Analysis Bot")
 4. Select your workspace
 
 ### 2. **Configure OAuth & Permissions**
@@ -94,6 +162,7 @@ The bot will start on `http://localhost:3000`
 
 1. Go to "Slash Commands"
 2. Create these commands:
+   - `/personality-analyze` - Analyze conversation participants' personalities
    - `/config` - Show current configuration
    - `/config-method` - Change analysis method
    - `/config-reset` - Reset to defaults
@@ -128,28 +197,53 @@ lt --port 3000
 ### 1. **Add Bot to Channel**
 
 1. Invite the bot to a channel: `/invite @YourBotName`
-2. The bot should respond to mentions
+2. The bot should respond to commands and @mentions
 
-### 2. **Test Bot Mentions**
+### 2. **Test Gemini-Powered Response Suggestions**
 
-1. In any channel with the bot, mention it:
+#### **@mention Activation**
+
+1. In any channel with the bot, mention it with a question:
    ```
-   @YourBotName help me with this conversation
+   @YourBotName How should I respond to this client?
    ```
-2. The bot should respond with an ephemeral message
+2. The bot will analyze the conversation and provide several Gemini-powered response suggestions as an ephemeral message.
 
-### 3. **Test Configuration Commands**
+#### **/suggest Command**
+
+1. In any channel with the bot, type:
+   ```
+   /suggest How should I respond to this client?
+   ```
+2. The bot will analyze the recent conversation and provide suggestions.
+
+### 3. **Test Personality Analysis Command**
+
+1. In any channel with the bot and multiple participants, type:
+   ```
+   /personality-analyze
+   ```
+2. The bot will analyze the conversation history and generate personality profiles for each participant.
+
+### 4. **Test Google SSO Authentication**
+
+1. Visit `http://localhost:3000/auth/google` in your browser
+2. Complete the Google OAuth2 flow
+3. You should be redirected back with a success message
+4. Test protected endpoints: `http://localhost:3000/auth/protected`
+
+### 5. **Test Configuration Commands**
 
 1. `/config` - Should show your current settings
 2. `/config-methods` - Should list available analysis methods
 3. `/config-method recent_messages` - Should update your method
 4. `/config-reset` - Should reset to defaults
 
-### 4. **Test Context Analysis**
+### 6. **Test Context Analysis**
 
-1. Have a conversation in a channel
-2. Mention the bot with a question
-3. The bot should analyze the conversation context and provide suggestions
+1. Have a conversation in a channel with multiple participants
+2. Use the `/personality-analyze` command
+3. The bot should analyze the conversation context and provide personality profiles
 
 ## 🔍 Debugging
 
@@ -177,11 +271,19 @@ Test the health endpoints:
 - Verify bot is added to the channel
 - Check ngrok URL is updated in Slack app
 
-**OpenAI errors:**
+**Gemini API errors:**
 
 - Verify API key is correct
 - Check API quota and billing
 - Ensure model name is valid
+- Verify Gemini API is enabled in Google Cloud
+
+**Google SSO errors:**
+
+- Verify OAuth2 credentials are correct
+- Check redirect URI matches exactly
+- Ensure JWT secret is set
+- Verify OAuth consent screen is configured
 
 **Configuration issues:**
 
@@ -194,81 +296,104 @@ Make sure all required variables are set:
 
 ```bash
 echo $SLACK_BOT_TOKEN
-echo $OPENAI_API_KEY
+echo $GEMINI_API_KEY
+echo $GOOGLE_CLIENT_ID
+echo $GOOGLE_CLIENT_SECRET
+echo $JWT_SECRET
 echo $SLACK_SIGNING_SECRET
 echo $SLACK_APP_TOKEN
 ```
 
-## 🐳 Docker Testing
+### 5. **Google Cloud Troubleshooting**
 
-### 1. **Build Docker Image**
+**API Key Issues:**
 
-```bash
-docker build -t slack-chatgpt-bot .
-```
+- Ensure the API key has access to Gemini API
+- Check if billing is enabled for the project
+- Verify the API key is not restricted to specific IPs
 
-### 2. **Run with Docker**
+**OAuth2 Issues:**
 
-```bash
-docker run -d \
-  --name slack-bot \
-  -p 3000:3000 \
-  --env-file .env \
-  -v $(pwd)/data:/app/data \
-  slack-chatgpt-bot
-```
+- Ensure the redirect URI exactly matches: `http://localhost:3000/auth/google/callback`
+- Check that the OAuth consent screen is published
+- Verify the client ID and secret are correct
 
-### 3. **Run with Docker Compose**
+### 6. **Slack Troubleshooting**
 
-```bash
-docker-compose up -d
-```
+**Command Not Working:**
 
-## 📝 Testing Checklist
+- Ensure the command is properly configured in Slack app
+- Check bot permissions include `commands` scope
+- Verify the bot is installed to the workspace
 
-- [ ] Bot responds to mentions
-- [ ] Responses are ephemeral (private)
-- [ ] Configuration commands work
-- [ ] Context analysis provides relevant suggestions
-- [ ] Error handling works (try invalid commands)
-- [ ] Rate limiting works (spam mentions)
-- [ ] Health endpoints respond
-- [ ] Logs show appropriate information
+**Events Not Receiving:**
 
-## 🚨 Troubleshooting
+- Check the Request URL is correct and accessible
+- Verify event subscriptions are enabled
+- Ensure the bot has the required scopes
 
-### Bot Not Starting
+## 🧪 Running Tests
+
+### Unit Tests
 
 ```bash
-# Check if port is in use
-lsof -i :3000
+# Run all tests
+npm test
 
-# Check environment variables
-node -e "console.log(process.env.SLACK_BOT_TOKEN ? 'Token set' : 'Token missing')"
+# Run specific test files
+npm test -- --testPathPatterns="personalityAnalyzer.test.ts"
+npm test -- --testPathPatterns="personalityHandler.test.ts"
+
+# Run with coverage
+npm test -- --coverage
 ```
 
-### Slack Events Not Working
+### Integration Tests
 
-1. Verify Request URL in Slack app settings
-2. Check ngrok is running and URL is correct
-3. Ensure all required scopes are added
-4. Check bot is installed to workspace
+```bash
+# Run integration tests
+npm test -- --testPathPatterns="integration.test.ts"
+```
 
-### OpenAI API Issues
+### Debug Tests
 
-1. Verify API key is valid
-2. Check account has credits
-3. Ensure model name is correct
-4. Check rate limits
+```bash
+# Run tests with debug logging
+LOG_LEVEL=debug npm test
+```
 
-## 🎯 Next Steps
+## 📝 Development Workflow
+
+### 1. **Making Changes**
+
+1. Make your changes in the source code
+2. Run tests to ensure nothing is broken
+3. Test locally with the bot
+4. Commit your changes
+
+### 2. **Testing New Features**
+
+1. Add unit tests for new functionality
+2. Test the feature manually in Slack
+3. Verify logging and error handling
+4. Update documentation if needed
+
+### 3. **Debugging Issues**
+
+1. Enable debug logging: `LOG_LEVEL=debug`
+2. Check the console for detailed logs
+3. Use the health check endpoints
+4. Verify all environment variables are set
+
+## 🚀 Next Steps
 
 Once local testing is working:
 
-1. **Deploy to staging** using the deployment guide
-2. **Set up monitoring** and logging
-3. **Configure production** environment variables
-4. **Test with real users** in your workspace
+1. Deploy to a staging environment
+2. Test with real Slack workspace
+3. Configure production environment variables
+4. Set up monitoring and logging
+5. Deploy to production
 
 ## 📞 Support
 
